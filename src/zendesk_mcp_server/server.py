@@ -6,8 +6,8 @@ from typing import Any, Dict
 
 from cachetools.func import ttl_cache
 from dotenv import load_dotenv
-from mcp.server import InitializationOptions, NotificationOptions
-from mcp.server import Server, types
+from mcp.server import InitializationOptions, NotificationOptions, Server
+from mcp import types
 from mcp.server.stdio import stdio_server
 from pydantic import AnyUrl
 
@@ -240,6 +240,31 @@ async def handle_list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
+            name="get_macros",
+            description="Fetch Zendesk macros (canned response templates). Returns macro titles, descriptions, and the actions they apply (e.g., setting status, adding a canned response).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page": {
+                        "type": "integer",
+                        "description": "Page number",
+                        "default": 1
+                    },
+                    "per_page": {
+                        "type": "integer",
+                        "description": "Number of macros per page (max 100)",
+                        "default": 25
+                    },
+                    "active_only": {
+                        "type": "boolean",
+                        "description": "If true, return only active macros",
+                        "default": True
+                    }
+                },
+                "required": []
+            }
+        ),
+        types.Tool(
             name="update_ticket",
             description="Update fields on an existing Zendesk ticket (e.g., status, priority, assignee_id)",
             inputSchema={
@@ -353,6 +378,21 @@ async def handle_call_tool(
                     type="text",
                     text=json.dumps({"content_type": content_type, "data_base64": result["data"]})
                 )]
+
+        elif name == "get_macros":
+            page = arguments.get("page", 1) if arguments else 1
+            per_page = arguments.get("per_page", 25) if arguments else 25
+            active_only = arguments.get("active_only", True) if arguments else True
+
+            macros = zendesk_client.get_macros(
+                page=page,
+                per_page=per_page,
+                active_only=active_only
+            )
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(macros, indent=2)
+            )]
 
         elif name == "update_ticket":
             if not arguments:
