@@ -334,6 +334,60 @@ class ZendeskClient:
         except Exception as e:
             raise Exception(f"Failed to create ticket: {str(e)}")
 
+    def get_macros(self, page: int = 1, per_page: int = 25, active_only: bool = True) -> Dict[str, Any]:
+        """
+        Fetch Zendesk macros (canned response templates) with pagination.
+
+        Args:
+            page: Page number (1-based)
+            per_page: Number of macros per page (max 100)
+            active_only: If True, fetch only active macros
+        """
+        try:
+            per_page = min(per_page, 100)
+            params = {
+                'page': str(page),
+                'per_page': str(per_page),
+            }
+            query_string = urllib.parse.urlencode(params)
+            endpoint = "macros/active.json" if active_only else "macros.json"
+            url = f"{self.base_url}/{endpoint}?{query_string}"
+
+            req = urllib.request.Request(url)
+            req.add_header('Authorization', self.auth_header)
+            req.add_header('Content-Type', 'application/json')
+
+            with urllib.request.urlopen(req) as response:
+                data = json.loads(response.read().decode())
+
+            macro_list = []
+            for macro in data.get('macros', []):
+                macro_list.append({
+                    'id': macro.get('id'),
+                    'title': macro.get('title'),
+                    'description': macro.get('description'),
+                    'active': macro.get('active'),
+                    'actions': macro.get('actions'),
+                    'restriction': macro.get('restriction'),
+                    'created_at': macro.get('created_at'),
+                    'updated_at': macro.get('updated_at'),
+                })
+
+            return {
+                'macros': macro_list,
+                'page': page,
+                'per_page': per_page,
+                'count': len(macro_list),
+                'has_more': data.get('next_page') is not None,
+                'next_page': page + 1 if data.get('next_page') else None,
+                'previous_page': page - 1 if data.get('previous_page') and page > 1 else None,
+            }
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode() if e.fp else "No response body"
+            raise Exception(f"Failed to get macros: HTTP {e.code} - {e.reason}. {error_body}")
+        except Exception as e:
+            raise Exception(f"Failed to get macros: {str(e)}")
+
     def update_ticket(self, ticket_id: int, **fields: Any) -> Dict[str, Any]:
         """
         Update a Zendesk ticket with provided fields using Zenpy.
